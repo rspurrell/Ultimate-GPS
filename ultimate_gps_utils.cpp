@@ -85,6 +85,13 @@ namespace GPSUtils
      */
     inline constexpr std::string_view kRmcSentenceSuffix = "RMC";
 
+    /**
+     * @brief Identifies the GGA NMEA sentence type.
+     *
+     * The suffix is used because the talker identifier preceding GGA can vary
+     * between GPS receivers and NMEA sentence variants.
+     */
+    inline constexpr std::string_view kGgaSentenceSuffix = "GGA";
 
     bool ParseNmeaSentence(UltimateGPS::GpsData& data, std::string_view sentence)
     {
@@ -111,6 +118,11 @@ namespace GPSUtils
         if (suffix == kRmcSentenceSuffix)
         {
             return ParseRmc(data, fields);
+        }
+
+        if (suffix == kGgaSentenceSuffix)
+        {
+            return ParseGga(data, fields);
         }
 
         return false;
@@ -238,6 +250,81 @@ namespace GPSUtils
                 {
                     data.magneticVariation = -data.magneticVariation;
                 }
+            }
+        }
+
+        return true;
+    }
+
+    bool ParseGga(UltimateGPS::GpsData& data, const std::vector<std::string_view>& fields)
+    {
+        static constexpr size_t idxTime = 1U,
+            idxLatitude = 2U, idxLatitudeHemisphere = 3U,
+            idxLongitude = 4U, idxLongitudeHemisphere = 5U,
+            idxFixQuality = 6U, idxSatellites = 7U, idxHDOP = 8U,
+            idxAltitude = 9U, idxGeoidSep = 11U;
+
+        static constexpr std::size_t kMinimumGgaFields = 10U;
+        if (fields.size() < kMinimumGgaFields)
+        {
+            return false;
+        }
+
+        ParseUtcTime(data, fields[idxTime]);
+
+        if (!fields[idxLatitude].empty() && !fields[idxLatitudeHemisphere].empty())
+        {
+            data.latitude = ConvertNmeaCoordinate(fields[idxLatitude], fields[idxLatitudeHemisphere].front());
+        }
+
+        if (!fields[idxLongitude].empty() && !fields[idxLongitudeHemisphere].empty())
+        {
+            data.longitude = ConvertNmeaCoordinate(fields[idxLongitude], fields[idxLongitudeHemisphere].front());
+        }
+
+        std::uint32_t fixQuality = 0U;
+        if (!fields[idxFixQuality].empty())
+        {
+            TryParseNumber(fields[idxFixQuality], fixQuality);
+        }
+        data.nmeaPositionValid = fixQuality > 0U;
+
+        if (!fields[idxSatellites].empty())
+        {
+            std::uint32_t satellites = 0U;
+            if (TryParseNumber(fields[idxSatellites], satellites))
+            {
+                // Clamp to 255
+                static constexpr std::uint32_t maximumSatelliteValue = std::numeric_limits<std::uint8_t>::max();
+                satellites = std::min(satellites, maximumSatelliteValue);
+                data.satellites = static_cast<std::uint8_t>(satellites);
+            }
+        }
+
+        if (!fields[idxHDOP].empty())
+        {
+            double hdop = kInvalidDoubleValue;
+            if (TryParseNumber(fields[idxHDOP], hdop))
+            {
+                data.horizontalDOP = hdop;
+            }
+        }
+
+        if (!fields[idxAltitude].empty())
+        {
+            double altitude = 0.0;
+            if (TryParseNumber(fields[idxAltitude], altitude))
+            {
+                data.altitudeMeters = altitude;
+            }
+        }
+
+        if (fields.size() > idxGeoidSep && !fields[idxGeoidSep].empty())
+        {
+            double geoidSeparation = kInvalidDoubleValue;
+            if (TryParseNumber(fields[idxGeoidSep], geoidSeparation))
+            {
+                data.geoidSeparation = geoidSeparation;
             }
         }
 

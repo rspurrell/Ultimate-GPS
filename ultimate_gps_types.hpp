@@ -52,6 +52,9 @@ namespace UltimateGPS
         /** @brief Indicates whether RMC reports a valid navigation fix. */
         bool nmeaFixValid{false};
 
+        /** @brief Indicates whether GGA reports a valid position. */
+        bool nmeaPositionValid{false};
+
         /**
          * @brief Stores the latitude in decimal degrees.
          *
@@ -67,6 +70,9 @@ namespace UltimateGPS
          * Negative values represent west.
          */
         double longitude{0.0};
+
+        /** @brief Altitude above mean sea level in meters. */
+        double altitudeMeters{0.0};
 
         /** @brief Ground speed in meters per second. */
         double speedMetersPerSecond{0.0};
@@ -84,6 +90,25 @@ namespace UltimateGPS
          * @note This field is optional and may not be provided by all GPS receivers.
          */
         double magneticVariation{0.0};
+
+        /**
+         * @brief Horizontal dilution of precision.
+         *
+         * @details A metric that measures how the geometric layout of satellites
+         * affects the accuracy of horizontal coordinates (latitude and longitude).
+         * Lower values mean better satellite spread and higher accuracy. Clustered
+         * satellites yield higher values and more location error.
+         */
+        double horizontalDOP{0.0};
+
+        /**
+         * @brief Geoid Separation represents the difference between the WGS84 ellipsoid
+         * height and mean sea level height.
+         */
+        double geoidSeparation{0.0};
+
+        /** @brief Number of satellites currently reported by the receiver. */
+        std::uint16_t satellites{0U};
 
         /** @brief UTC year. */
         std::uint16_t utcYear{0U};

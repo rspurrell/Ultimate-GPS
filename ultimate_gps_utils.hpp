@@ -59,6 +59,16 @@ namespace GPSUtils
     bool ParseRmc(UltimateGPS::GpsData& data, const std::vector<std::string_view>& fields);
 
     /**
+     * @brief Parses a GGA sentence.
+     *
+     * @param data The GPS data to update GGA fields.
+     * @param fields Parsed NMEA fields.
+     *
+     * @return True when parsing succeeds.
+     */
+    bool ParseGga(UltimateGPS::GpsData& data, const std::vector<std::string_view>& fields);
+
+    /**
      * @brief Converts an NMEA coordinate into decimal degrees.
      *
      * @param coordinate NMEA DDMM.MMMM or DDDMM.MMMM coordinate.
