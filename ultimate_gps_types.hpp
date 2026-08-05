@@ -8,8 +8,10 @@
 
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace UltimateGPS
 {
@@ -147,5 +149,32 @@ namespace UltimateGPS
 
         /** @brief UTC second. */
         std::uint8_t utcSecond{0U};
+
+        std::string get32PointHeading() const
+        {
+            auto degrees = courseDegrees;
+            // Normalize input to the range [0.0, 360.0)
+            degrees = std::fmod(degrees, 360.0);
+            if (degrees < 0.0)
+            {
+                degrees += 360.0;
+            }
+
+            // Define the 32 compass points starting from North (0 degrees)
+            static const std::vector<std::string> compassPoints =
+            {
+                "N", "NbE", "NNE", "NEbN", "NE",  "NEbE", "ENE", "EbN",
+                "E", "EbS", "ESE", "SEbE", "SE",  "SEbS", "SSE", "SbE",
+                "S", "SbW", "SSW", "SWbS", "SW",  "SWbW", "WSW", "WbS",
+                "W", "WbN", "WNW", "NWbW", "NW",  "NWbN", "NNW", "NbW"
+            };
+
+            // Shift by half a 32 point cardinal width (11.25 / 2 = 5.625) to center the ranges.
+            // Dividing by 11.25 converts the offset degree into an array index integer.
+            int index = static_cast<int>((degrees + 5.625) / 11.25);
+
+            // Wrap around index 32 back to 0 (handles the upper half of North)
+            return compassPoints[index % 32];
+        }
     };
 }
