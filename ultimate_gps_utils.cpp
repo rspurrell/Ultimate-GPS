@@ -26,6 +26,14 @@ namespace GPSUtils
     inline constexpr char kWestHemisphere = 'W';
 
     /**
+     * @brief Defines the number of hexadecimal characters used by an NMEA checksum.
+     *
+     * NMEA represents its checksum as exactly two hexadecimal characters following
+     * the checksum delimiter.
+     */
+    inline constexpr std::size_t kNmeaChecksumCharacterCount = 2U;
+
+    /**
      * @brief Defines the number of minutes contained in one degree of latitude or longitude.
      *
      * NMEA represents geographic coordinates using degrees and minutes, requiring
@@ -80,6 +88,11 @@ namespace GPSUtils
 
     bool ParseNmeaSentence(UltimateGPS::GpsData& data, std::string_view sentence)
     {
+        if (!ValidateNmeaChecksum(sentence))
+        {
+            return false;
+        }
+
         const std::vector<std::string_view> fields = SplitNmeaFields(sentence);
 
         if (fields.empty())
@@ -101,6 +114,43 @@ namespace GPSUtils
         }
 
         return false;
+    }
+
+    bool ValidateNmeaChecksum(std::string_view sentence)
+    {
+        if (sentence.empty() || sentence.front() != kNmeaStartCharacter)
+        {
+            return false;
+        }
+
+        const std::size_t chkSumDelimiterIdx = sentence.find(kNmeaChecksumDelimiter);
+        if (chkSumDelimiterIdx == std::string::npos)
+        {
+            return false;
+        }
+
+        // Ensure that checksum is two hex characters
+        const std::size_t checksumStart = chkSumDelimiterIdx + 1U;
+        if (sentence.size() - checksumStart < kNmeaChecksumCharacterCount)
+        {
+            return false;
+        }
+
+        std::uint8_t calculatedChecksum = 0U;
+        for (std::size_t idx = 1U; idx < chkSumDelimiterIdx; idx++)
+        {
+            calculatedChecksum ^= static_cast<std::uint8_t>(sentence[idx]);
+        }
+
+        const int highNibble = HexToValue(sentence[checksumStart]);
+        const int lowNibble = HexToValue(sentence[checksumStart + 1U]);
+        if (highNibble < 0 || lowNibble < 0)
+        {
+            return false;
+        }
+        const std::uint8_t receivedChecksum = static_cast<std::uint8_t>((highNibble << 4) | lowNibble);
+
+        return calculatedChecksum == receivedChecksum;
     }
 
     std::vector<std::string_view> SplitNmeaFields(std::string_view sentence)
@@ -294,4 +344,32 @@ namespace GPSUtils
         return ec == std::errc{} && ptr == value.data() + value.size();
     }
 
+    int HexToValue(char value)
+    {
+        static constexpr char kDigitZero = '0';
+        static constexpr char kDigitNine = '9';
+        static constexpr char kUppercaseA = 'A';
+        static constexpr char kUppercaseF = 'F';
+        static constexpr char kLowercaseA = 'a';
+        static constexpr char kLowercaseF = 'f';
+        static constexpr int kUppercaseOffset = 10;
+        static constexpr int kLowercaseOffset = 10;
+
+        if (value >= kDigitZero && value <= kDigitNine)
+        {
+            return value - kDigitZero;
+        }
+
+        if (value >= kUppercaseA && value <= kUppercaseF)
+        {
+            return value - kUppercaseA + kUppercaseOffset;
+        }
+
+        if (value >= kLowercaseA && value <= kLowercaseF)
+        {
+            return value - kLowercaseA + kLowercaseOffset;
+        }
+
+        return -1;
+    }
 }

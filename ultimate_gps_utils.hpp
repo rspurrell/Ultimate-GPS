@@ -23,6 +23,15 @@ namespace GPSUtils
     bool ParseNmeaSentence(UltimateGPS::GpsData& data, std::string_view sentence);
 
     /**
+     * @brief Validates an NMEA sentence via its checksum.
+     *
+     * @param sentence Complete NMEA sentence.
+     *
+     * @return True when checksum validation succeeds.
+     */
+    bool ValidateNmeaChecksum(std::string_view sentence);
+
+    /**
      * @brief Splits a validated NMEA sentence into comma-delimited fields.
      *
      * The checksum delimiter is required because a complete NMEA sentence must
@@ -86,4 +95,12 @@ namespace GPSUtils
     template<typename T>
     bool TryParseNumber(std::string_view value, T& result);
 
+    /**
+     * @brief Converts a hexadecimal character into its numeric value.
+     *
+     * @param value Hexadecimal character.
+     *
+     * @return Numeric hexadecimal value.
+     */
+    int HexToValue(char value);
 }
