@@ -4,6 +4,7 @@
  */
 
 #include "ultimate_gps.hpp"
+#include "ultimate_gps_utils.hpp"
 
 // Include the Linux file-control API used to open the UART.
 #include <fcntl.h>
@@ -27,6 +28,12 @@ namespace UltimateGPS
 
     /** @brief Named constant representing the number of UART bytes read per non-blocking read operation. */
     inline constexpr std::size_t kSerialReadBufferSize = 512U;
+
+    /** @brief Defines the optional NMEA carriage-return character. */
+    inline constexpr char kNmeaCarriageReturnCharacter = '\r';
+
+    /** @brief Defines the NMEA line-feed terminator. */
+    inline constexpr char kNmeaLineFeedCharacter = '\n';
 
     /**
      * @brief Converts the configured baud rate to the Linux termios constant.
@@ -90,6 +97,7 @@ namespace UltimateGPS
         }
 
         receiveBuffer_.clear();
+        data_ = GpsData{};
         return true;
     }
 
@@ -123,7 +131,17 @@ namespace UltimateGPS
             processed = true;
         }
 
+        if (ProcessReceiveBuffer())
+        {
+            processed = true;
+        }
+
         return processed;
+    }
+
+    const GpsData& GPS::GetData() const noexcept
+    {
+        return data_;
     }
 
     bool GPS::OpenSerial()
@@ -222,5 +240,32 @@ namespace UltimateGPS
         }
 
         return dataRead;
+    }
+
+    bool GPS::ProcessReceiveBuffer()
+    {
+        bool processed = false;
+        while (true)
+        {
+            const std::size_t newlinePosition = receiveBuffer_.find(kNmeaLineFeedCharacter);
+            if (newlinePosition == std::string::npos)
+            {
+                break;
+            }
+
+            std::string sentence = receiveBuffer_.substr(0U, newlinePosition);
+            receiveBuffer_.erase(0U, newlinePosition + 1U);
+            if (!sentence.empty() && sentence.back() == kNmeaCarriageReturnCharacter)
+            {
+                sentence.pop_back();
+            }
+
+            if (GPSUtils::ParseNmeaSentence(data_, sentence))
+            {
+                processed = true;
+            }
+        }
+
+        return processed;
     }
 }

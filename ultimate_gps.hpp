@@ -86,6 +86,13 @@ namespace UltimateGPS
          * @return True when at least one input event was processed.
          */
         bool Update();
+
+        /**
+         * @brief Returns the latest GPS navigation state.
+         *
+         * @return Constant reference to current GPS data.
+         */
+        const GpsData& GetData() const noexcept;
     private:
 
         /**
@@ -102,6 +109,13 @@ namespace UltimateGPS
          */
         bool ReadSerialData();
 
+        /**
+         * @brief Scans receiveBuffer_ for complete NMEA sentences, validates checksums, and parses contents.
+         *
+         * @return True when at least one complete sentence was processed.
+         */
+        bool ProcessReceiveBuffer();
+
         /// Linux file descriptor for the non-blocking UART serial connection. Set to -1 when closed or uninitialized.
         int fdSerial_{-1};
 
@@ -110,5 +124,8 @@ namespace UltimateGPS
 
         /// Configuration settings for UART device paths, baud rate, and GPIO lines.
         GpsConfig config_{};
+
+        /// Cached current state of GPS navigation data, fix statuses, and time values.
+        GpsData data_{};
     };
 }
