@@ -25,9 +25,7 @@ add_library(UltimateGPS ${PROJECT_SOURCES})
 
 # Make the project root, src/, and lib/ directories available to the compiler
 # so headers can be included from those locations.
-target_include_directories(UltimateGPS PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
+target_include_directories(UltimateGPS PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Turn on common warning flags to help catch issues during compilation.
 target_compile_options(UltimateGPS PRIVATE -Wall -Wextra -Wpedantic)
