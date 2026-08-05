@@ -25,6 +25,9 @@ namespace UltimateGPS
     /** @brief Named constant representing a successful POSIX return value. */
     inline constexpr int kPosixSuccess = 0;
 
+    /** @brief Named constant representing the number of UART bytes read per non-blocking read operation. */
+    inline constexpr std::size_t kSerialReadBufferSize = 512U;
+
     /**
      * @brief Converts the configured baud rate to the Linux termios constant.
      *
@@ -85,6 +88,8 @@ namespace UltimateGPS
             Close();
             return false;
         }
+
+        receiveBuffer_.clear();
         return true;
     }
 
@@ -95,11 +100,30 @@ namespace UltimateGPS
             close(fdSerial_);
             fdSerial_ = kInvalidFileDescriptor;
         }
+
+        receiveBuffer_.clear();
     }
 
     bool GPS::IsOpen() const noexcept
     {
         return fdSerial_ >= 0;
+    }
+
+    bool GPS::Update()
+    {
+        if (!IsOpen())
+        {
+            return false;
+        }
+
+        bool processed = false;
+
+        if (ReadSerialData())
+        {
+            processed = true;
+        }
+
+        return processed;
     }
 
     bool GPS::OpenSerial()
@@ -164,4 +188,39 @@ namespace UltimateGPS
         return true;
     }
 
+    bool GPS::ReadSerialData()
+    {
+        bool dataRead = false;
+        char buffer[kSerialReadBufferSize]{};
+        while (true)
+        {
+            const ssize_t bytesRead = read(fdSerial_, buffer, sizeof(buffer));
+
+            if (bytesRead > 0)
+            {
+                receiveBuffer_.append(buffer, static_cast<std::size_t>(bytesRead));
+                dataRead = true;
+                continue;
+            }
+
+            if (bytesRead == 0)
+            {
+                break;
+            }
+
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+            {
+                break;
+            }
+
+            if (errno == EINTR)
+            {
+                continue;
+            }
+
+            break;
+        }
+
+        return dataRead;
+    }
 }

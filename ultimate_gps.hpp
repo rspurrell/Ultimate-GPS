@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <string> // The string header provides std::string for configurable device paths.
+
 #include "ultimate_gps_types.hpp"
 
 /**
@@ -76,6 +78,14 @@ namespace UltimateGPS
          */
         bool IsOpen() const noexcept;
 
+        /**
+         * @brief Processes all currently available GPS input.
+         *
+         * This method never intentionally waits for future UART or PPS data.
+         *
+         * @return True when at least one input event was processed.
+         */
+        bool Update();
     private:
 
         /**
@@ -85,8 +95,18 @@ namespace UltimateGPS
          */
         bool OpenSerial();
 
+        /**
+         * @brief Reads all available UART data without blocking.
+         *
+         * @return True when bytes were received.
+         */
+        bool ReadSerialData();
+
         /// Linux file descriptor for the non-blocking UART serial connection. Set to -1 when closed or uninitialized.
         int fdSerial_{-1};
+
+        /// Accumulation buffer for raw incoming UART characters prior to NMEA line parsing.
+        std::string receiveBuffer_{};
 
         /// Configuration settings for UART device paths, baud rate, and GPIO lines.
         GpsConfig config_{};
