@@ -41,6 +41,23 @@ namespace UltimateGPS
     };
 
     /**
+     * @brief Represents the quality of the current GPS navigation solution.
+     *
+     * The values correspond to the standard NMEA GSA fix-mode values.
+     */
+    enum class FixType : std::uint8_t
+    {
+        /** @brief No valid navigation fix is available. */
+        None = 1U,
+
+        /** @brief A two-dimensional navigation fix is available. */
+        TwoDimensional = 2U,
+
+        /** @brief A three-dimensional navigation fix is available. */
+        ThreeDimensional = 3U
+    };
+
+    /**
      * @brief Represents the current GPS navigation state.
      *
      * The structure contains both decoded NMEA values and independently
@@ -54,6 +71,9 @@ namespace UltimateGPS
 
         /** @brief Indicates whether GGA reports a valid position. */
         bool nmeaPositionValid{false};
+
+        /** @brief Current NMEA fix classification. */
+        FixType fixType{FixType::None};
 
         /**
          * @brief Stores the latitude in decimal degrees.

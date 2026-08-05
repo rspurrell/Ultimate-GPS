@@ -69,6 +69,16 @@ namespace GPSUtils
     bool ParseGga(UltimateGPS::GpsData& data, const std::vector<std::string_view>& fields);
 
     /**
+     * @brief Parses a GSA sentence to determine 2D or 3D fix state.
+     *
+     * @param data The GPS data to update GSA fields.
+     * @param fields Parsed NMEA fields.
+     *
+     * @return True when the fix mode was successfully processed.
+     */
+    bool ParseGsa(UltimateGPS::GpsData& data, const std::vector<std::string_view>& fields);
+
+    /**
      * @brief Converts an NMEA coordinate into decimal degrees.
      *
      * @param coordinate NMEA DDMM.MMMM or DDDMM.MMMM coordinate.

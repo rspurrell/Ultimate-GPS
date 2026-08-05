@@ -93,6 +93,14 @@ namespace GPSUtils
      */
     inline constexpr std::string_view kGgaSentenceSuffix = "GGA";
 
+    /**
+     * @brief Identifies the GSA NMEA sentence type.
+     *
+     * The suffix is used because the talker identifier preceding GSA can vary
+     * between GPS receivers and NMEA sentence variants.
+     */
+    inline constexpr std::string_view kGsaSentenceSuffix = "GSA";
+
     bool ParseNmeaSentence(UltimateGPS::GpsData& data, std::string_view sentence)
     {
         if (!ValidateNmeaChecksum(sentence))
@@ -123,6 +131,11 @@ namespace GPSUtils
         if (suffix == kGgaSentenceSuffix)
         {
             return ParseGga(data, fields);
+        }
+
+        if (suffix == kGsaSentenceSuffix)
+        {
+            return ParseGsa(data, fields);
         }
 
         return false;
@@ -326,6 +339,38 @@ namespace GPSUtils
             {
                 data.geoidSeparation = geoidSeparation;
             }
+        }
+
+        return true;
+    }
+
+    bool ParseGsa(UltimateGPS::GpsData& data, const std::vector<std::string_view>& fields)
+    {
+        static constexpr size_t kFixModeFieldIndex = 2U;
+
+        static constexpr size_t kMinimumGsaFields = 3U;
+        if (fields.size() < kMinimumGsaFields)
+        {
+            return false;
+        }
+
+        std::uint32_t fixMode = 0U;
+        if (!TryParseNumber(fields[kFixModeFieldIndex], fixMode))
+        {
+            return false;
+        }
+
+        switch (fixMode)
+        {
+        case 2U:
+            data.fixType = UltimateGPS::FixType::TwoDimensional;
+            break;
+        case 3U:
+            data.fixType = UltimateGPS::FixType::ThreeDimensional;
+            break;
+        default:
+            data.fixType = UltimateGPS::FixType::None;
+            break;
         }
 
         return true;
