@@ -6,6 +6,15 @@
 #include "ultimate_gps.hpp"
 #include "ultimate_gps_utils.hpp"
 
+// Include errno values used to distinguish non-blocking reads from errors.
+#include <cerrno>
+
+// Include the C standard library numeric conversion functions.
+#include <cstdlib>
+
+// Include the C standard library string utilities.
+#include <cstring>
+
 // Include the Linux file-control API used to open the UART.
 #include <fcntl.h>
 
@@ -14,6 +23,15 @@
 
 // Include the Linux POSIX API used to read and close file descriptors.
 #include <unistd.h>
+
+// Include the libgpiod v2 C API used to access GPIO character devices.
+#include <gpiod.h>
+
+// Include the algorithm header for std::floor.
+#include <cmath>
+
+// Include the limits header for numeric range validation.
+#include <limits>
 
 /**
  * @brief Contains the implementation of the standalone GPS library.
@@ -29,11 +47,24 @@ namespace UltimateGPS
     /** @brief Named constant representing the number of UART bytes read per non-blocking read operation. */
     inline constexpr std::size_t kSerialReadBufferSize = 512U;
 
+    /** @brief Named constant representing the maximum number of GPIO events retrieved from a single PPS event read operation. */
+    inline constexpr std::size_t kMaximumPpsEventsPerRead = 16U;
+
+    /**
+     * @brief Named constant representing the default GPIO consumer label.
+     *
+     * The label appears in Linux GPIO diagnostics and helps identify which
+     * application currently owns the GPS GPIO lines.
+     */
+    inline constexpr const char* kGpioConsumerName = "ultimate-gps";
+
     /** @brief Defines the optional NMEA carriage-return character. */
     inline constexpr char kNmeaCarriageReturnCharacter = '\r';
 
     /** @brief Defines the NMEA line-feed terminator. */
     inline constexpr char kNmeaLineFeedCharacter = '\n';
+
+    inline constexpr std::int64_t kPpsWaitTimeoutMilliseconds = 0;
 
     /**
      * @brief Converts the configured baud rate to the Linux termios constant.
@@ -73,6 +104,19 @@ namespace UltimateGPS
         }
     }
 
+    /**
+     * @brief Converts a libgpiod edge-event timestamp to a chrono timestamp.
+     *
+     * @param eventTimestamp Timestamp supplied by libgpiod.
+     *
+     * @return Monotonic timestamp in nanoseconds.
+     */
+    inline std::chrono::nanoseconds ToChronoTimestamp(std::uint64_t eventTimestamp)
+    {
+        return std::chrono::nanoseconds(
+            static_cast<std::chrono::nanoseconds::rep>(eventTimestamp)
+        );
+    }
 
     GPS::GPS() : config_(GpsConfig{}) {}
 
@@ -96,13 +140,35 @@ namespace UltimateGPS
             return false;
         }
 
+        if (!OpenPpsGpio())
+        {
+            Close();
+            return false;
+        }
+
         receiveBuffer_.clear();
         data_ = GpsData{};
+        lastPpsEvent_ = PpsEvent{};
+        receivedPps_ = false;
+        ppsEventCount_ = 0U;
+
         return true;
     }
 
     void GPS::Close()
     {
+        if (ppsRequest_ != nullptr)
+        {
+            gpiod_line_request_release(ppsRequest_);
+            ppsRequest_ = nullptr;
+        }
+
+        if (gpioChip_ != nullptr)
+        {
+            gpiod_chip_close(gpioChip_);
+            gpioChip_ = nullptr;
+        }
+
         if (fdSerial_ > kInvalidFileDescriptor)
         {
             close(fdSerial_);
@@ -114,7 +180,9 @@ namespace UltimateGPS
 
     bool GPS::IsOpen() const noexcept
     {
-        return fdSerial_ >= 0;
+        return fdSerial_ >= 0 &&
+               gpioChip_ != nullptr &&
+               ppsRequest_ != nullptr;
     }
 
     bool GPS::Update()
@@ -136,12 +204,31 @@ namespace UltimateGPS
             processed = true;
         }
 
+        if (ProcessPpsEvents())
+        {
+            processed = true;
+        }
+
         return processed;
     }
 
     const GpsData& GPS::GetData() const noexcept
     {
         return data_;
+    }
+    bool GPS::HasReceivedPps() const noexcept
+    {
+        return receivedPps_;
+    }
+
+    std::uint32_t GPS::GetPpsEventCount() const noexcept
+    {
+        return ppsEventCount_;
+    }
+
+    const PpsEvent& GPS::GetLastPpsEvent() const noexcept
+    {
+        return lastPpsEvent_;
     }
 
     bool GPS::OpenSerial()
@@ -206,6 +293,87 @@ namespace UltimateGPS
         return true;
     }
 
+    bool GPS::OpenPpsGpio()
+    {
+        // Prevent multi-call resource leaks and EBUSY errors
+        if (ppsRequest_ != nullptr)
+        {
+            return true; // Already opened successfully
+        }
+
+        // Open the GPIO chip if not already opened. The chip represents the GPIO controller device.
+        if (gpioChip_ == nullptr)
+        {
+            gpioChip_ = gpiod_chip_open(config_.gpioChip.c_str());
+            if (gpioChip_ == nullptr)
+            {
+                return false;
+            }
+        }
+
+        // Create a new line settings object to configure the GPIO line properties.
+        gpiod_line_settings* settings = gpiod_line_settings_new();
+        if (settings == nullptr)
+        {
+            return false;
+        }
+
+        // Configure the GPIO line as an input to receive pulse-per-second (PPS) signals.
+        if (gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_INPUT) != 0)
+        {
+            gpiod_line_settings_free(settings);
+            return false;
+        }
+
+        // Set edge detection to rising edge to trigger on the PPS pulse transition from low to high.
+        if (gpiod_line_settings_set_edge_detection(settings, GPIOD_LINE_EDGE_RISING) != 0)
+        {
+            gpiod_line_settings_free(settings);
+            return false;
+        }
+
+        // Create a line configuration object that will hold the settings for one or more GPIO lines.
+        gpiod_line_config* lineConfig = gpiod_line_config_new();
+        if (lineConfig == nullptr)
+        {
+            gpiod_line_settings_free(settings);
+            return false;
+        }
+
+        // Add the configured settings to the line configuration for the specific GPIO line offset.
+        const unsigned int offset = config_.ppsGpio;
+        if (gpiod_line_config_add_line_settings(lineConfig, &offset, 1U, settings) != 0)
+        {
+            gpiod_line_settings_free(settings);
+            gpiod_line_config_free(lineConfig);
+            return false;
+        }
+
+        // Free the line settings object as it has been copied into the line configuration.
+        gpiod_line_settings_free(settings);
+
+        // Create a request configuration object to configure the request parameters.
+        gpiod_request_config* requestConfig = gpiod_request_config_new();
+        if (requestConfig == nullptr)
+        {
+            gpiod_line_config_free(lineConfig);
+            return false;
+        }
+
+        // Set the consumer name for tracking which application/service owns this GPIO line request.
+        gpiod_request_config_set_consumer(requestConfig, kGpioConsumerName);
+
+        // Request the GPIO line from the chip with the configured settings. Store the request handle for later use.
+        ppsRequest_ = gpiod_chip_request_lines(gpioChip_, requestConfig, lineConfig);
+
+        // Free the request and line configuration objects as they are no longer needed.
+        gpiod_request_config_free(requestConfig);
+        gpiod_line_config_free(lineConfig);
+
+        // Return success if the request handle was obtained; otherwise return false indicating failure.
+        return ppsRequest_ != nullptr;
+    }
+
     bool GPS::ReadSerialData()
     {
         bool dataRead = false;
@@ -265,6 +433,58 @@ namespace UltimateGPS
                 processed = true;
             }
         }
+
+        return processed;
+    }
+
+    bool GPS::ProcessPpsEvents()
+    {
+        if (ppsRequest_ == nullptr)
+        {
+            return false;
+        }
+
+        const int waitResult = gpiod_line_request_wait_edge_events(ppsRequest_, kPpsWaitTimeoutMilliseconds);
+        if (waitResult <= 0)
+        {
+            return false;
+        }
+
+        gpiod_edge_event_buffer* eventBuffer = gpiod_edge_event_buffer_new(kMaximumPpsEventsPerRead);
+        if (eventBuffer == nullptr)
+        {
+            return false;
+        }
+
+        const int numEvents = gpiod_line_request_read_edge_events(ppsRequest_, eventBuffer, kMaximumPpsEventsPerRead);
+        if (numEvents < 0)
+        {
+            gpiod_edge_event_buffer_free(eventBuffer);
+            return false;
+        }
+
+        bool processed = false;
+        for (size_t i = 0; i < static_cast<size_t>(numEvents); ++i)
+        {
+            gpiod_edge_event* event = gpiod_edge_event_buffer_get_event(eventBuffer, i);
+            if (event == nullptr)
+            {
+                continue;
+            }
+
+            if (gpiod_edge_event_get_event_type(event) != GPIOD_EDGE_EVENT_RISING_EDGE)
+            {
+                continue;
+            }
+
+            lastPpsEvent_.valid = true;
+            lastPpsEvent_.timestamp = ToChronoTimestamp(gpiod_edge_event_get_timestamp_ns(event));
+            lastPpsEvent_.sequence = ++ppsEventCount_;
+            receivedPps_ = true;
+            processed = true;
+        }
+
+        gpiod_edge_event_buffer_free(eventBuffer);
 
         return processed;
     }

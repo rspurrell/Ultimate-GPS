@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -26,6 +27,16 @@ namespace UltimateGPS
     inline constexpr std::uint32_t kDefaultBaudRate = 9600U;
 
     /**
+     * @brief Default Linux GPIO controller.
+     */
+    inline constexpr const char* kDefaultGpioChip = "/dev/gpiochip0";
+
+    /**
+     * @brief Default BCM GPIO used for GPS PPS.
+     */
+    inline constexpr std::uint32_t kDefaultPpsGpio = 24U;
+
+    /**
      * @brief Configures the GPS UART and GPIO interfaces.
      */
     struct GpsConfig
@@ -40,6 +51,15 @@ namespace UltimateGPS
          */
         std::uint32_t baudRate{kDefaultBaudRate};
 
+        /**
+         * @brief Linux GPIO chip device.
+         */
+        std::string gpioChip{kDefaultGpioChip};
+
+        /**
+         * @brief BCM GPIO connected to GPS PPS.
+         */
+        std::uint32_t ppsGpio{kDefaultPpsGpio};
     };
 
     /**
@@ -57,6 +77,25 @@ namespace UltimateGPS
 
         /** @brief A three-dimensional navigation fix is available. */
         ThreeDimensional = 3U
+    };
+
+    /**
+     * @brief Represents a captured PPS event.
+     *
+     * The timestamp originates from the Linux GPIO character-device event
+     * timestamp rather than from userspace clock sampling, minimizing scheduling
+     * latency in the reported timestamp.
+     */
+    struct PpsEvent final
+    {
+        /** @brief Indicates whether a PPS event was successfully captured. */
+        bool valid{false};
+
+        /** @brief Monotonic timestamp at which the kernel observed the PPS edge. */
+        std::chrono::nanoseconds timestamp{};
+
+        /** @brief Sequential PPS event number since the GPS was opened. */
+        std::uint32_t sequence{0U};
     };
 
     /**

@@ -13,9 +13,14 @@
 
 #pragma once
 
+#include <cstdint> // The cstdint header provides fixed-width integer types for hardware identifiers.
 #include <string> // The string header provides std::string for configurable device paths.
 
 #include "ultimate_gps_types.hpp"
+
+// Forward declarations to avoid polluting consumer namespace with libgpiod headers
+struct gpiod_chip;
+struct gpiod_line_request;
 
 /**
  * @brief Contains the standalone Ultimate GPS library.
@@ -93,6 +98,27 @@ namespace UltimateGPS
          * @return Constant reference to current GPS data.
          */
         const GpsData& GetData() const noexcept;
+        /**
+         * @brief Returns whether at least one PPS edge has been detected.
+         *
+         * @return True when PPS has been received.
+         */
+        bool HasReceivedPps() const noexcept;
+
+        /**
+         * @brief Returns the PPS event count.
+         *
+         * @return Number of PPS events since Open().
+         */
+        std::uint32_t GetPpsEventCount() const noexcept;
+
+        /**
+         * @brief Returns the latest PPS event.
+         *
+         * @return Constant reference to the latest PPS event.
+         */
+        const PpsEvent& GetLastPpsEvent() const noexcept;
+
     private:
 
         /**
@@ -101,6 +127,13 @@ namespace UltimateGPS
          * @return True when the serial port is opened and termios options are set successfully.
          */
         bool OpenSerial();
+
+        /**
+         * @brief Requests and configures the GPS PPS GPIO line for rising-edge event detection via libgpiod v2.
+         *
+         * @return True when the line request succeeds.
+         */
+        bool OpenPpsGpio();
 
         /**
          * @brief Reads all available UART data without blocking.
@@ -116,8 +149,21 @@ namespace UltimateGPS
          */
         bool ProcessReceiveBuffer();
 
+        /**
+         * @brief Reads pending rising-edge events from the PPS GPIO line and updates PPS timing state.
+         *
+         * @return True when one or more edge events were read and recorded.
+         */
+        bool ProcessPpsEvents();
+
         /// Linux file descriptor for the non-blocking UART serial connection. Set to -1 when closed or uninitialized.
         int fdSerial_{-1};
+
+        /// Handle to the libgpiod v2 GPIO chip device.
+        gpiod_chip* gpioChip_{nullptr};
+
+        /// Handle to the libgpiod v2 line request for PPS rising-edge event monitoring.
+        gpiod_line_request* ppsRequest_{nullptr};
 
         /// Accumulation buffer for raw incoming UART characters prior to NMEA line parsing.
         std::string receiveBuffer_{};
@@ -127,5 +173,14 @@ namespace UltimateGPS
 
         /// Cached current state of GPS navigation data, fix statuses, and time values.
         GpsData data_{};
+
+        /// Stores the details and timestamp of the most recent PPS rising-edge event.
+        PpsEvent lastPpsEvent_{};
+
+        /// Indicates whether at least one valid hardware PPS pulse event has been recorded.
+        bool receivedPps_{false};
+
+        /// Running count of detected hardware PPS pulse events since the interface was opened.
+        std::uint32_t ppsEventCount_{0U};
     };
 }

@@ -9,6 +9,7 @@
 #include <charconv> // Provides std::from_chars for string_view parsing
 #include <cstdint> // Provides fixed-width integer types (uint8_t, uint16_t, etc.).
 #include <limits> // Provides access to numeric_limits lowest() and max().
+#include <stdexcept>
 #include <string> // The string header provides std::string.
 #include <vector> // Include the vector header for NMEA field storage.
 
