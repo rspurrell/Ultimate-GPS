@@ -215,12 +215,25 @@ namespace GPSUtils
             return false;
         }
 
+        ParseUtcDate(data, fields[idxDate]);
         ParseUtcTime(data, fields[idxTime]);
 
-        data.nmeaFixValid = fields[idxStatus] == "A";
-        if (!data.nmeaFixValid)
+        auto status = fields[idxStatus];
+        if (status == "A")
         {
-            return true;
+            // Fix is valid. GPS LOCKED.
+            data.status = UltimateGPS::GpsStatus::Locked;
+        }
+        else if (status == "V")
+        {
+            // Fix lost.
+            data.status = UltimateGPS::GpsStatus::NoLock;
+        }
+        else
+        {
+            // Unknown status. GPS INITIALIZING.
+            data.status = UltimateGPS::GpsStatus::Initializing;
+            return false;
         }
 
         if (!fields[idxLatitude].empty() && !fields[idxLatitudeHemisphere].empty())
@@ -250,8 +263,6 @@ namespace GPSUtils
                 data.courseDegrees = course;
             }
         }
-
-        ParseUtcDate(data, fields[idxDate]);
 
         if (fields.size() > idxMagDirection)
         {
@@ -301,7 +312,6 @@ namespace GPSUtils
         {
             TryParseNumber(fields[idxFixQuality], fixQuality);
         }
-        data.nmeaPositionValid = fixQuality > 0U;
 
         if (!fields[idxSatellites].empty())
         {

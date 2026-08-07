@@ -63,6 +63,45 @@ namespace UltimateGPS
     };
 
     /**
+     * @brief Represents the current operating state of the GPS receiver.
+     *
+     * The GPS receiver progresses through these states as it acquires and loses
+     * satellite synchronization. This state indicates the receiver's overall
+     * navigation and timing status and should be used by applications to determine
+     * the reliability of GPS-derived position and UTC time.
+     */
+    enum class GpsStatus
+    {
+        /**
+         * @brief The receiver is attempting to acquire its initial GPS synchronization.
+         *
+         * This is the state immediately following power-up. The receiver has not yet
+         * established an initial navigation solution or synchronized its internal
+         * clock from the GPS satellite constellation.
+         */
+        Initializing,
+
+        /**
+         * @brief The receiver has lost satellite synchronization after previously
+         * establishing a valid GPS lock.
+         *
+         * While in this state, the receiver is attempting to reacquire satellite
+         * synchronization. Depending on the GPS receiver's behavior, UTC time may
+         * continue to be maintained by its internal real-time clock until
+         * synchronization is restored.
+         */
+        NoLock,
+
+        /**
+         * @brief The receiver has an active GPS satellite lock.
+         *
+         * Position, navigation, and UTC time are actively synchronized to the GPS
+         * satellite constellation and are considered authoritative.
+         */
+        Locked
+    };
+
+    /**
      * @brief Represents the quality of the current GPS navigation solution.
      *
      * The values correspond to the standard NMEA GSA fix-mode values.
@@ -106,12 +145,8 @@ namespace UltimateGPS
      */
     struct GpsData
     {
-
-        /** @brief Indicates whether RMC reports a valid navigation fix. */
-        bool nmeaFixValid{false};
-
-        /** @brief Indicates whether GGA reports a valid position. */
-        bool nmeaPositionValid{false};
+        /** @brief Represents the current operating state of the GPS receiver. */
+        GpsStatus status{GpsStatus::Initializing};
 
         /** @brief Current NMEA fix classification. */
         FixType fixType{FixType::None};

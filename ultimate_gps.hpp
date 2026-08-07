@@ -98,6 +98,17 @@ namespace UltimateGPS
          * @return Constant reference to current GPS data.
          */
         const GpsData& GetData() const noexcept;
+
+        /**
+         * @brief Returns the current GPS fix status according to the latest RMC sentence.
+         *
+         * @return One of the following values:
+         *         - Initializing when the receiver is performing a cold start
+         *         - NoLock when a previously acquired lock was lost
+         *         - Locked when the latest RMC sentence reports a valid fix
+         */
+        GpsStatus GetStatus() const noexcept;
+
         /**
          * @brief Returns whether at least one PPS edge has been detected.
          *

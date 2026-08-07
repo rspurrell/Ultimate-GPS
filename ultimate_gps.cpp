@@ -216,6 +216,12 @@ namespace UltimateGPS
     {
         return data_;
     }
+
+    GpsStatus GPS::GetStatus() const noexcept
+    {
+        return data_.status;
+    }
+
     bool GPS::HasReceivedPps() const noexcept
     {
         return receivedPps_;
