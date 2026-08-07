@@ -461,7 +461,11 @@ namespace UltimateGPS
         }
 
         const int waitResult = gpiod_line_request_wait_edge_events(ppsRequest_, kPpsWaitTimeoutMilliseconds);
-        if (waitResult <= 0)
+        if (waitResult == 0)
+        {
+            return true;
+        }
+        else if (waitResult == -1)
         {
             return false;
         }
