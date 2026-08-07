@@ -48,7 +48,7 @@ namespace UltimateGPS
     inline constexpr std::size_t kSerialReadBufferSize = 512U;
 
     /** @brief Named constant representing the maximum number of GPIO events retrieved from a single PPS event read operation. */
-    inline constexpr std::size_t kMaximumPpsEventsPerRead = 16U;
+    inline constexpr std::size_t kPpsEventBufferSize = 16U;
 
     /**
      * @brief Named constant representing the default GPIO consumer label.
@@ -338,6 +338,13 @@ namespace UltimateGPS
             return false;
         }
 
+        // Set event clock to monotonic as our pulse-per-second event measurement should be relative to init runtime.
+        if (gpiod_line_settings_set_event_clock(settings, GPIOD_LINE_CLOCK_MONOTONIC) != 0)
+        {
+            gpiod_line_settings_free(settings);
+            return false;
+        }
+
         // Create a line configuration object that will hold the settings for one or more GPIO lines.
         gpiod_line_config* lineConfig = gpiod_line_config_new();
         if (lineConfig == nullptr)
@@ -365,6 +372,9 @@ namespace UltimateGPS
             gpiod_line_config_free(lineConfig);
             return false;
         }
+
+        // Match kernel buffer to user-space buffer
+        gpiod_request_config_set_event_buffer_size(requestConfig, kPpsEventBufferSize);
 
         // Set the consumer name for tracking which application/service owns this GPIO line request.
         gpiod_request_config_set_consumer(requestConfig, kGpioConsumerName);
@@ -456,13 +466,13 @@ namespace UltimateGPS
             return false;
         }
 
-        gpiod_edge_event_buffer* eventBuffer = gpiod_edge_event_buffer_new(kMaximumPpsEventsPerRead);
+        gpiod_edge_event_buffer* eventBuffer = gpiod_edge_event_buffer_new(kPpsEventBufferSize);
         if (eventBuffer == nullptr)
         {
             return false;
         }
 
-        const int numEvents = gpiod_line_request_read_edge_events(ppsRequest_, eventBuffer, kMaximumPpsEventsPerRead);
+        const int numEvents = gpiod_line_request_read_edge_events(ppsRequest_, eventBuffer, kPpsEventBufferSize);
         if (numEvents < 0)
         {
             gpiod_edge_event_buffer_free(eventBuffer);
