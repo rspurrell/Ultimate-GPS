@@ -38,9 +38,6 @@ target_compile_options(UltimateGPS PRIVATE -Wall -Wextra -Wpedantic)
 # Check if the user explicitly requested a Debug build via -DCMAKE_BUILD_TYPE=Debug
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug build detected. Adding full debug symbols.")
-
-    # -g adds debug symbols; -O0 disables optimizations so gdb can step accurately
-    target_compile_options(UltimateGPS PRIVATE -g -O0)
 # ===========================================================================
 # Release
 # ==========================================================================
