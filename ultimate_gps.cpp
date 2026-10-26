@@ -134,15 +134,20 @@ namespace UltimateGPS
             return true;
         }
 
+        errno = 0;
         if (!OpenSerial())
         {
+            int saved_errno = errno;
             Close();
+            errno = saved_errno;
             return false;
         }
 
         if (!OpenPpsGpio())
         {
+            int saved_errno = errno;
             Close();
+            errno = saved_errno;
             return false;
         }
 
